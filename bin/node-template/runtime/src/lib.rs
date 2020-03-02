@@ -9,7 +9,7 @@
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
 use sp_std::prelude::*;
-use sp_core::OpaqueMetadata;
+use sp_core::{Blake2Hasher, OpaqueMetadata, U256};
 use sp_runtime::{
 	ApplyExtrinsicResult, transaction_validity::TransactionValidity, generic, create_runtime_str,
 	impl_opaque_keys, MultiSignature,
@@ -25,6 +25,8 @@ use sp_version::RuntimeVersion;
 #[cfg(feature = "std")]
 use sp_version::NativeVersion;
 
+use evm::{FeeCalculator, HashTruncateConvertAccountId};
+
 // A few exports that help ease life for downstream crates.
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
@@ -36,6 +38,7 @@ pub use frame_support::{
 	traits::Randomness,
 	weights::Weight,
 };
+pub use evm::Account as EVMAccount;
 
 /// Importing a template pallet
 pub use template;
@@ -65,6 +68,9 @@ pub type Hash = sp_core::H256;
 
 /// Digest item type.
 pub type DigestItem = generic::DigestItem<Hash>;
+
+/// EVM struct
+pub struct FixedGasPrice;
 
 /// Opaque types. These are used by the CLI to instantiate machinery that don't need to know
 /// the specifics of the runtime. They can then be made to be agnostic over specific formats
@@ -169,6 +175,20 @@ impl system::Trait for Runtime {
 	type AccountData = balances::AccountData<Balance>;
 }
 
+impl FeeCalculator for FixedGasPrice {
+	fn min_gas_price() -> U256 {
+		1.into()
+	}
+}
+
+impl evm::Trait for Runtime {
+	type FeeCalculator = FixedGasPrice;
+	type ConvertAccountId = HashTruncateConvertAccountId<Blake2Hasher>;
+	type Currency = Balances;
+	type Event = Event;
+	type Precompiles = ();
+}
+
 impl aura::Trait for Runtime {
 	type AuthorityId = AuraId;
 }
@@ -240,6 +260,7 @@ construct_runtime!(
 		Balances: balances::{Module, Call, Storage, Config<T>, Event<T>},
 		TransactionPayment: transaction_payment::{Module, Storage},
 		Sudo: sudo::{Module, Call, Config<T>, Storage, Event<T>},
+        EVM: evm::{Module, Config, Call, Storage, Event},
 		// Used for the module template in `./template.rs`
 		TemplateModule: template::{Module, Call, Storage, Event<T>},
 	}

@@ -1,4 +1,5 @@
 use sp_std::marker::PhantomData;
+use sp_std::vec;
 use sp_std::vec::Vec;
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
@@ -135,6 +136,8 @@ impl<'vicinity, T: Trait> ApplyBackend for Backend<'vicinity, T> {
 		I: IntoIterator<Item=(H256, H256)>,
 		L: IntoIterator<Item=evm::backend::Log>,
 	{
+		let mut affected_memory: Vec<(H160,H256)> = vec![];
+
 		for apply in values {
 			match apply {
 				Apply::Modify {
@@ -151,6 +154,7 @@ impl<'vicinity, T: Trait> ApplyBackend for Backend<'vicinity, T> {
 
 					if reset_storage {
 						AccountStorages::remove_prefix(address);
+						// additional event necessary if we want to be consistent about storage notification
 					}
 
 					for (index, value) in storage {
@@ -159,6 +163,7 @@ impl<'vicinity, T: Trait> ApplyBackend for Backend<'vicinity, T> {
 						} else {
 							AccountStorages::insert(address, index, value);
 						}
+						affected_memory.push((address, index));
 					}
 
 					if delete_empty {
@@ -168,6 +173,38 @@ impl<'vicinity, T: Trait> ApplyBackend for Backend<'vicinity, T> {
 				Apply::Delete { address } => {
 					Module::<T>::remove_account(&address)
 				},
+			}
+		}
+
+		if affected_memory.len() > 0 {
+			affected_memory.sort();
+
+			let mut curr_addr = None;
+			let mut curr_batch: Vec<H256> = vec![];
+			let mut batches: Vec<(H160, Vec<H256>)> = vec![];
+
+			for (addr, idx) in affected_memory.into_iter() {
+				if curr_addr == Some(addr) {
+					curr_batch.push(idx);
+				} else {
+					if let Some(curr_addr) = curr_addr {
+						batches.push((curr_addr, curr_batch));
+					}
+					curr_addr = Some(addr);
+					curr_batch = vec![idx];
+				}
+			}
+
+			if curr_batch.len() > 0 {
+				batches.push((curr_addr.unwrap(), curr_batch));
+			}
+
+			for (address, indices) in batches.into_iter() {
+				Module::<T>::deposit_event(Event::Log(Log {
+					address,
+					topics: indices,
+					data: vec![],
+				}));
 			}
 		}
 

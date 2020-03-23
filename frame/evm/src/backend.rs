@@ -136,7 +136,7 @@ impl<'vicinity, T: Trait> ApplyBackend for Backend<'vicinity, T> {
 		I: IntoIterator<Item=(H256, H256)>,
 		L: IntoIterator<Item=evm::backend::Log>,
 	{
-		let mut affected_memory: Vec<(H160,H256)> = vec![];
+		let mut affected_storage: Vec<(H160,H256)> = vec![];
 
 		for apply in values {
 			match apply {
@@ -154,7 +154,7 @@ impl<'vicinity, T: Trait> ApplyBackend for Backend<'vicinity, T> {
 
 					if reset_storage {
 						AccountStorages::remove_prefix(address);
-						// additional event necessary if we want to be consistent about storage notification
+						Module::<T>::deposit_event(Event::StorageReset(StorageReset { address }))
 					}
 
 					for (index, value) in storage {
@@ -163,7 +163,8 @@ impl<'vicinity, T: Trait> ApplyBackend for Backend<'vicinity, T> {
 						} else {
 							AccountStorages::insert(address, index, value);
 						}
-						affected_memory.push((address, index));
+
+						affected_storage.push((address, index));
 					}
 
 					if delete_empty {
@@ -176,14 +177,14 @@ impl<'vicinity, T: Trait> ApplyBackend for Backend<'vicinity, T> {
 			}
 		}
 
-		if affected_memory.len() > 0 {
-			affected_memory.sort();
+		if affected_storage.len() > 0 {
+			affected_storage.sort();
 
 			let mut curr_addr = None;
 			let mut curr_batch: Vec<H256> = vec![];
 			let mut batches: Vec<(H160, Vec<H256>)> = vec![];
 
-			for (addr, idx) in affected_memory.into_iter() {
+			for (addr, idx) in affected_storage.into_iter() {
 				if curr_addr == Some(addr) {
 					curr_batch.push(idx);
 				} else {
@@ -200,10 +201,9 @@ impl<'vicinity, T: Trait> ApplyBackend for Backend<'vicinity, T> {
 			}
 
 			for (address, indices) in batches.into_iter() {
-				Module::<T>::deposit_event(Event::Log(Log {
+				Module::<T>::deposit_event(Event::StorageWritten(StorageWritten {
 					address,
-					topics: indices,
-					data: vec![],
+					indices,
 				}));
 			}
 		}
@@ -216,4 +216,20 @@ impl<'vicinity, T: Trait> ApplyBackend for Backend<'vicinity, T> {
 			}));
 		}
 	}
+}
+
+#[derive(Clone, Eq, PartialEq, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+pub struct StorageWritten {
+	/// Source address of the contract affected.
+	pub address: H160,
+	/// Indices affected.
+	pub indices: Vec<H256>,
+}
+
+#[derive(Clone, Eq, PartialEq, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+pub struct StorageReset {
+	/// Source address of the contract affected.
+	pub address: H160,
 }

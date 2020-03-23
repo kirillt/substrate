@@ -21,7 +21,7 @@
 
 mod backend;
 
-pub use crate::backend::{Account, Log, Vicinity, Backend};
+pub use crate::backend::{Account, Log, Vicinity, Backend, StorageReset, StorageWritten};
 
 use sp_std::{vec::Vec, marker::PhantomData};
 use frame_support::{ensure, decl_module, decl_storage, decl_event, decl_error};
@@ -152,6 +152,11 @@ decl_event! {
 		Log(Log),
 		/// A contract has been created at given address.
 		Created(H160),
+
+		/// A batch of all indices written during last call (see "storage_tracing" feature)
+		StorageWritten(StorageWritten),
+		/// An indicator that the storage was reset during last call (see "storage tracing" feature)
+		StorageReset(StorageReset),
 	}
 }
 

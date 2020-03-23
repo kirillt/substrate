@@ -35,8 +35,6 @@ sp-runtime = { version = "2.0.0-alpha.4", path = "../../../primitives/runtime" }
 sc-basic-authorship = { path = "../../../client/basic-authorship", version = "0.8.0-alpha.4"}
 
 node-template-runtime = { version = "2.0.0-alpha.4", path = "../runtime" }
-=======
-node-template-runtime = { version = "2.0.0-alpha.4", path = "../runtime" }
 evm = { package = "pallet-evm", version = "2.0.0-alpha.4", default-features = false, path = "../../../frame/evm" }
 
 [build-dependencies]
